@@ -27,12 +27,14 @@ type
     FSyncArgChannel: TChannel;
     FSyncArgNewValue: TIOValue;
     FSyncArgOldValue: TIOValue;
+    FClient: TFPHTTPClient;
     function GetIO(Number: TChannel): AnsiString;
     function StrToValue(Str: AnsiString): TIOValue;
     procedure CopyBufferedValues;
     procedure ProcessFirstGetEvent;
     procedure ProcessTriggerEvent;
     function GetValue(Channel: TChannel): TIOValue;
+    function ParseDeviceResponse(Response: AnsiString): AnsiString;
   protected
     procedure Execute; override;
   public
@@ -44,6 +46,10 @@ type
   end;
 
 implementation
+
+const
+  UserName = 'visor';
+  Password = 'ping';
 
 constructor TCommThread.CreateThis;
 var
@@ -61,11 +67,16 @@ begin
   FFirstGetDone := False;
   FOnTrigger := nil;
   FOnFirstGet := nil;
+
+  FClient := TFPHTTPClient.Create(nil);
+  FClient.UserName := UserName;
+  FClient.Password := Password;
 end;
 
 
 destructor TCommThread.Destroy;
 begin
+  FClient.Free;
   inherited;
 end;
 
@@ -77,6 +88,7 @@ var
   NewValue: TIOValue;
   Channel: TChannel;
   IntervalStartTicks: Longint;
+
 begin
   while not Terminated do
   begin
@@ -122,22 +134,19 @@ begin
     '1': Result := iovHigh;
     else Result := iovNone;
   end;
-
 end;
 
 
 function TCommThread.GetIO(Number: TChannel): AnsiString;
 var
-  RawJson: AnsiString;
-  JsonArray: TJSONArray;
-
+  DeviceResponse: AnsiString;
 begin
   try
-     RawJson := TFPHTTPClient.SimpleGet(FGetRequest + IntToStr(Number));
-     JsonArray := TJSONArray(GetJSON(RawJson));
+    DeviceResponse := FClient.Get(FGetRequest + IntToStr(Number));
+    Result := ParseDeviceResponse(DeviceResponse);
   except
+    Result := 'exception';
   end;
-  Result := '';
 end;
 
 
@@ -157,16 +166,116 @@ begin
   Result := FValues[Channel];
 end;
 
+
 procedure TCommThread.ProcessFirstGetEvent;
 begin
   if Assigned(FOnFirstGet) then
     FOnFirstGet(Self, FSyncArgChannel, FSyncArgNewValue);
 end;
 
+
 procedure TCommThread.ProcessTriggerEvent;
 begin
   if Assigned(FOnTrigger) then
     FOnTrigger(Self, FSyncArgChannel, FSyncArgOldValue, FSyncArgNewValue);
+end;
+
+
+function TCommThread.ParseDeviceResponse(Response: AnsiString): AnsiString;
+label
+  OnError;
+var
+  ResponseLen: Integer;
+  ParseIndex: Integer = 1;
+  CurrChar: Char;
+
+  procedure SkipSpaces;
+  begin
+    while ParseIndex <= ResponseLen do
+    begin
+      CurrChar := Response[ParseIndex];
+      if CurrChar <> ' ' then
+        Break;
+      Inc(ParseIndex);
+    end;
+  end;
+
+  function ParseSym: AnsiString;
+  begin
+    Result := '';
+    if ParseIndex <= ResponseLen then
+    begin
+      Result := Response[ParseIndex];
+      Inc(ParseIndex);
+    end;
+  end;
+
+  function ParseStr: AnsiString;
+  begin
+    Result := '';
+    while ParseIndex <= ResponseLen do
+    begin
+      CurrChar := Response[ParseIndex];
+      if (CurrChar < 'a') or (CurrChar > 'z') then
+        Break;
+      Result := Result + CurrChar;
+      Inc(ParseIndex);
+    end;
+  end;
+
+  function ParseInt: AnsiString;
+  begin
+    Result := '';
+    while ParseIndex <= ResponseLen do
+    begin
+      CurrChar := Response[ParseIndex];
+      if ((CurrChar < '0') or (CurrChar > '9')) and (CurrChar <> '-')  then
+        Break;
+      Result := Result + CurrChar;
+      Inc(ParseIndex);
+    end;
+  end;
+
+  function IsNotEqual(Str1, Str2: AnsiString): Boolean;
+  begin
+    Result := AnsiCompareStr(Str1, Str2) <> 0;
+  end;
+
+begin
+  ResponseLen := Length(Response);
+
+  SkipSpaces;
+  if IsNotEqual(ParseStr, 'io') then
+    goto OnError;
+  if IsNotEqual(ParseSym, '_') then
+    goto OnError;
+  if IsNotEqual(ParseStr, 'result') then
+    goto OnError;
+  SkipSpaces;
+  if IsNotEqual(ParseSym, '(') then
+    goto OnError;
+  SkipSpaces;
+  if IsNotEqual(ParseSym, '''') then
+    goto OnError;
+  if IsNotEqual(ParseStr, 'ok') then
+    goto OnError;
+  if IsNotEqual(ParseSym, '''') then
+    goto OnError;
+  SkipSpaces;
+  if IsNotEqual(ParseSym, ',') then
+    goto OnError;
+  SkipSpaces;
+  Result := ParseInt;
+  SkipSpaces;
+  if IsNotEqual(ParseSym, ',') then
+    goto OnError;
+  SkipSpaces;
+
+  Result := ParseInt;
+  Exit;
+
+OnError:
+  Result := 'error';
 end;
 
 end.

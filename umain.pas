@@ -9,17 +9,14 @@ uses
   ucommthread, ucommon;
 
 type
-
-  { TMainForm }
-
   TMainForm = class(TForm)
     IOChannelValueLabel10: TLabel;
     IOChannelValueLabel11: TLabel;
     IOChannelValueLabel12: TLabel;
-    IOChannelValueLabel5: TLabel;
-    IOChannelValueLabel6: TLabel;
-    IOChannelValueLabel7: TLabel;
-    IOChannelValueLabel8: TLabel;
+    DurationLabel1: TLabel;
+    DurationLabel2: TLabel;
+    DurationLabel3: TLabel;
+    DurationLabel4: TLabel;
     IOChannelValueLabel9: TLabel;
     Label1: TLabel;
     IOChannelValueLabel1: TLabel;
@@ -66,7 +63,7 @@ begin
 
   FCommThread := TCommThread.CreateThis;
   FCommThread.OnFirstGet := @OnCommFirstGet;
-  FCommthread.OnTrigger := @OnCommTrigger;
+  FCommThread.OnTrigger := @OnCommTrigger;
   FCommThread.Start;
 end;
 
@@ -82,12 +79,19 @@ procedure TMainForm.UpdateTimerTimer(Sender: TObject);
 var
   Channel: TChannel;
   ValueLabel: TLabel;
+  DurationLabel: TLabel;
+  ChannelStr: AnsiString;
 begin
   for Channel in UCommon.Channels do
   begin
-    ValueLabel := FindComponent('IOChannelValueLabel' + IntToStr(Channel)) as TLabel;
+    ChannelStr := IntToStr(Channel);
+    ValueLabel := FindComponent('IOChannelValueLabel' + ChannelStr) as TLabel;
     if Assigned(ValueLabel) then
       ValueLabel.Caption := IOValueToStr(FIOValues[Channel]);
+
+    DurationLabel := FindComponent('DurationLabel' + ChannelStr) as TLabel;
+    if Assigned(DurationLabel) then
+      DurationLabel.Caption := FloatToStrF(0.001*(GetTickCount64 - FTriggerTicks[Channel]), ffFixed, 15, 1);
   end;
 end;
 
@@ -102,14 +106,14 @@ end;
 
 procedure TMainForm.OnCommTrigger(Sender: TObject; Channel: TChannel; OldValue: TIOValue; NewValue: TIOValue);
 var
-  Period: Longint;
+  Duration: Longint;
   Ticks: Longint;
 begin
   Ticks := GetTickCount64;
-  Period := Ticks - FTriggerTicks[Channel];
+  Duration := Ticks - FTriggerTicks[Channel];
   FIOValues[Channel] := NewValue;
   FTriggerTicks[Channel] := Ticks;
-  LogChannelTrigger(Channel, NewValue, OldValue, Period);
+  LogChannelTrigger(Channel, NewValue, OldValue, Duration);
 end;
 
 end.

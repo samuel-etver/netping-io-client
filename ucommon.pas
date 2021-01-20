@@ -12,7 +12,7 @@ type
   TIOValue = (iovNone, iovLow, iovHigh);
 
 const
-  Version = 'v0.0.1';
+  Version = 'v0.1.0';
   Channels: set of TChannel = [1];
   LogFileName = 'log.txt';
 
@@ -32,7 +32,9 @@ var
   procedure LogDate;
   procedure LogDate(Txt: AnsiString; NewLine: Boolean = True);
   procedure LogChannelState(Channel: TChannel; Value: TIOValue);
-  procedure LogChannelTrigger(Channel: TChannel; NewValue: TIOValue; OldValue: TIOValue; Period: Longint);
+  procedure LogChannelTrigger(Channel: TChannel; NewValue: TIOValue; OldValue: TIOValue; Duration: Longint);
+  procedure LogSpace;
+  procedure LogSpaces(N: Integer);
   procedure LogFlush;
 
 
@@ -98,6 +100,7 @@ begin
   Log := TLog.Create(LogFilePath + DirectorySeparator + LogFileName);
 
   LogNl;
+  LogWriteLn('---');
   LogDate('Программа запущена');
   LogNl;
 end;
@@ -176,7 +179,7 @@ end;
 procedure LogDate(Txt: AnsiString; NewLine: Boolean);
 begin
   LogDate;
-  LogWrite(' ');
+  LogSpace;
   LogWrite(Txt);
   if NewLine then
     LogNl;
@@ -185,22 +188,65 @@ end;
 
 procedure LogChannelState(Channel: TChannel; Value: TIOValue);
 begin
-  LogDate;
+  LogDate('Состояние входа ' + IntToStr(Channel) + ': ' + IOValueToStr(Value));
+  LogNl;
 end;
 
 
-procedure LogChannelTrigger(Channel: TChannel; NewValue: TIOValue; OldValue: TIOValue; Period: Longint);
+procedure LogChannelTrigger(Channel: TChannel; NewValue: TIOValue; OldValue: TIOValue; Duration: Longint);
+var
+  Txt: AnsiString = '';
+  ChannelStr: AnsiString;
+  DurationStr: AnsiString;
+
 begin
-  LogDate;
+  if OldValue = NewValue then
+    Exit;
+
+  ChannelStr := IntToStr(Channel);
+  DurationStr := '(' + FloatToStrF(0.001*Duration, ffFixed, 15, 1) + 'c)';
+
+  if OldValue = iovNone then
+  begin
+    Txt := 'Восстановление связи' + DurationStr + '. Вход ' + ChannelStr +
+      ': ' + IOValueToStr(NewValue);
+  end
+  else if NewValue = iovNone then
+  begin
+    Txt := 'Потеря связи. Вход ' + ChannelStr + ': ' + IOValueToStr(OldValue) +
+      DurationStr;
+  end
+  else
+  begin
+    Txt := 'Изменения состояние входа ' + ChannelStr + ': из ' + IOValueToStr(OldValue) +
+      DurationStr + ' в ' + IOValueToStr(NewValue);
+  end;
+
+  LogDate(Txt);
+  LogNl;
 end;
 
+
+procedure LogSpace;
+begin
+  LogWrite(' ');
+end;
+
+
+procedure LogSpaces(N: Integer);
+var
+  I: Integer;
+  Txt: AnsiString = '';
+begin
+  for I := 1 to N do
+    Txt := Txt + ' ';
+  LogWrite(Txt);
+end;
 
 procedure LogFlush;
 begin
   Log.Flush;
 end;
-
-
 
 
 initialization
