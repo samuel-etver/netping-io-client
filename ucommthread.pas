@@ -38,7 +38,7 @@ type
   protected
     procedure Execute; override;
   public
-    constructor CreateThis;
+    constructor Create;
     destructor Destroy; override;
     property Values[Channel: TChannel]: TIOValue read GetValue;
     property OnTrigger: TCommTriggerEvent read FOnTrigger write FOnTrigger;
@@ -51,7 +51,7 @@ const
   UserName = 'visor';
   Password = 'ping';
 
-constructor TCommThread.CreateThis;
+constructor TCommThread.Create;
 var
   Channel: TChannel;
 begin

@@ -53,15 +53,20 @@ implementation
 procedure TMainForm.FormCreate(Sender: TObject);
 var
   Channel: TChannel;
+  Ticks: Longint;
 begin
   VersionLabel.Caption := Version;
   UCommon.LoadConfig;
   UCommon.Startup;
 
+  Ticks := GetTickCount64;
   for Channel in TChannel do
+  begin
     FIOValues[Channel] := iovNone;
+    FTriggerTicks[Channel] := Ticks;
+  end;
 
-  FCommThread := TCommThread.CreateThis;
+  FCommThread := TCommThread.Create;
   FCommThread.OnFirstGet := @OnCommFirstGet;
   FCommThread.OnTrigger := @OnCommTrigger;
   FCommThread.Start;
@@ -69,8 +74,18 @@ end;
 
 
 procedure TMainForm.FormDestroy(Sender: TObject);
+var
+  Channel: TChannel;
+  Ticks: Longint;
 begin
   FCommThread.Terminate;
+
+  Ticks := GetTickCount64;
+  for Channel in UCommon.Channels do
+  begin
+    LogChannelState(Channel, FIOValues[Channel], Ticks - FTriggerTicks[Channel]);
+  end;
+
   FCommThread.WaitFor;
 end;
 
@@ -100,7 +115,7 @@ procedure TMainForm.OnCommFirstGet(Sender: TObject; Channel: TChannel; Value: TI
 begin
   FIOValues[Channel] := Value;
   FTriggerTicks[Channel] := GetTickCount64;
-  LogChannelState(Channel, Value);
+  LogChannelState(Channel, Value, 0);
 end;
 
 

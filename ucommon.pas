@@ -15,10 +15,12 @@ const
   Version = 'v0.1.0';
   Channels: set of TChannel = [1];
   LogFileName = 'log.txt';
+  ReportFileName = 'report';
 
 var
   Url: AnsiString;
   LogFilePath: AnsiString;
+  ReportFilePath: AnsiString;
   RequestInterval: Real;
 
   procedure LoadConfig;
@@ -30,8 +32,10 @@ var
   procedure LogWriteLn(Txt: AnsiString);
   procedure LogNl;
   procedure LogDate;
+  procedure LogDate(DtTm: TDateTime);
+  procedure LogDate(DtTm: TDateTime; Txt: AnsiString; NewLine: Boolean = True);
   procedure LogDate(Txt: AnsiString; NewLine: Boolean = True);
-  procedure LogChannelState(Channel: TChannel; Value: TIOValue);
+  procedure LogChannelState(Channel: TChannel; Value: TIOValue; Duration: Longint);
   procedure LogChannelTrigger(Channel: TChannel; NewValue: TIOValue; OldValue: TIOValue; Duration: Longint);
   procedure LogSpace;
   procedure LogSpaces(N: Integer);
@@ -41,15 +45,17 @@ var
 implementation
 
 uses
-  Forms, ulog;
+  Forms, ulog, ucsvreport;
 
 const
   UrlDefault = 'http://192.168.0.100';
   LogFilePathDefault = 'Log';
+  ReportFilePathDefault = 'Report';
   RequestIntervalDefault = 1.0;
 
 var
   Log: TLog;
+  Report: TCsvReport;
 
 
 procedure Init;
@@ -89,6 +95,7 @@ begin
 
   Url := GetStr('URL', UrlDefault);
   LogFilePath := GetStr('LogFilePath', LogFilePathDefault);
+  ReportFilePath := GetStr('ReportFilePath', ReportFilePathDefault);
   RequestInterval := GetFloat('RequestInterval', RequestIntervalDefault);
 
   Lines.Free;
@@ -98,6 +105,7 @@ end;
 procedure Startup;
 begin
   Log := TLog.Create(LogFilePath + DirectorySeparator + LogFileName);
+  Report := TCsvReport.Create(ReportFilePath + DirectorySeparator + ReportFileName);
 
   LogNl;
   LogWriteLn('---');
@@ -109,6 +117,8 @@ end;
 procedure Fin;
 begin
   LogDate('Программа остановлена');
+  if Assigned(Report) then
+    Report.Free;
   if Assigned(Log) then
     Log.Free;
 end;
@@ -146,14 +156,13 @@ begin
 end;
 
 
-procedure LogDate;
+procedure LogDate(DtTm: TDateTime);
 var
-  DtTm: TDateTime;
   Year, Mon, Day: Word;
   Hour, Min, Sec, MlSec: Word;
   Txt: AnsiString;
 
-  function to02(Value: Word): AnsiString;
+  function To02(Value: Word): AnsiString;
   begin
     if Value < 10
       then Result := '0' + IntToStr(Value)
@@ -161,24 +170,29 @@ var
   end;
 
 begin
-  DtTm := Now;
   DecodeDate(DtTm, Year, Mon, Day);
   DecodeTime(DtTm, Hour, Min, Sec, MlSec);
 
   Txt := IntToStr(Year) + '-' +
-         to02(Mon) + '-' +
-         to02(Day) + ' ' +
-         to02(Hour) + ':' +
-         to02(Min) + ':' +
-         to02(Sec);
+         To02(Mon) + '-' +
+         To02(Day) + ' ' +
+         To02(Hour) + ':' +
+         To02(Min) + ':' +
+         To02(Sec);
 
   LogWrite(Txt);
 end;
 
 
-procedure LogDate(Txt: AnsiString; NewLine: Boolean);
+procedure LogDate;
 begin
-  LogDate;
+  LogDate(Now);
+end;
+
+
+procedure LogDate(DtTm: TDateTime; Txt: AnsiString; NewLine: Boolean);
+begin
+  LogDate(DtTm);
   LogSpace;
   LogWrite(Txt);
   if NewLine then
@@ -186,15 +200,33 @@ begin
 end;
 
 
-procedure LogChannelState(Channel: TChannel; Value: TIOValue);
+procedure LogDate(Txt: AnsiString; NewLine: Boolean);
 begin
-  LogDate('Состояние входа ' + IntToStr(Channel) + ': ' + IOValueToStr(Value));
+  LogDate(Now, Txt, NewLine);
+end;
+
+
+procedure LogChannelState(Channel: TChannel; Value: TIOValue; Duration: Longint);
+var
+  DtTm: TDateTime;
+  Txt: AnsiString;
+begin
+  DtTm := Now;
+
+  Txt := 'Состояние входа ' + IntToStr(Channel) + ': ' + IOValueToStr(Value);
+  if Duration > 0 then
+    Txt := Txt + '(' + FloatToStrF(0.001*Duration, ffFixed, 15, 1) + 'c)';
+  LogDate(DtTm, Txt);
   LogNl;
+
+  if Duration > 0 then
+    Report.Append(DtTm, Value, Duration);
 end;
 
 
 procedure LogChannelTrigger(Channel: TChannel; NewValue: TIOValue; OldValue: TIOValue; Duration: Longint);
 var
+  DtTm: TDateTime;
   Txt: AnsiString = '';
   ChannelStr: AnsiString;
   DurationStr: AnsiString;
@@ -202,6 +234,8 @@ var
 begin
   if OldValue = NewValue then
     Exit;
+
+  DtTm := Now;
 
   ChannelStr := IntToStr(Channel);
   DurationStr := '(' + FloatToStrF(0.001*Duration, ffFixed, 15, 1) + 'c)';
@@ -222,8 +256,10 @@ begin
       DurationStr + ' в ' + IOValueToStr(NewValue);
   end;
 
-  LogDate(Txt);
+  LogDate(DtTm, Txt);
   LogNl;
+
+  Report.Append(DtTm, OldValue, Duration);
 end;
 
 
@@ -242,6 +278,7 @@ begin
     Txt := Txt + ' ';
   LogWrite(Txt);
 end;
+
 
 procedure LogFlush;
 begin
