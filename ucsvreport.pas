@@ -18,7 +18,7 @@ type
     destructor Destroy; override;
     procedure Close;
     procedure Flush;
-    procedure Append(DtTm: TDateTime; Value: TIOValue; Duration: Longint);
+    procedure Append(DtTm: TDateTime; Channel: TChannel; Value: TIOValue; Duration: Longint);
     property Opened: Boolean read IsOpened;
   end;
 
@@ -105,7 +105,7 @@ begin
 end;
 
 
-procedure TCsvReport.Append(DtTm: TDateTime; Value: TIOValue; Duration: Longint);
+procedure TCsvReport.Append(DtTm: TDateTime; Channel: TChannel; Value: TIOValue; Duration: Longint);
 var
   Txt: AnsiString;
   Year, Mon, Day: Word;
@@ -133,6 +133,8 @@ begin
     To02(Hour) + ':' +
     To02(Min) + ':' +
     To02(Sec) +
+    ';' +
+    IntToStr(Channel) +
     ';' +
     FloatToStrF(0.001*Duration, ffFixed, 15, 0) +
     ';' + LineEnding;

@@ -13,7 +13,7 @@ type
 
 const
   Version = 'v0.1.0';
-  Channels: set of TChannel = [1];
+  Channels: set of TChannel = [1,2,3,4];
   LogFileName = 'log.txt';
   ReportFileName = 'report';
 
@@ -220,7 +220,7 @@ begin
   LogNl;
 
   if Duration > 0 then
-    Report.Append(DtTm, Value, Duration);
+    Report.Append(DtTm, Channel, Value, Duration);
 end;
 
 
@@ -259,7 +259,7 @@ begin
   LogDate(DtTm, Txt);
   LogNl;
 
-  Report.Append(DtTm, OldValue, Duration);
+  Report.Append(DtTm, Channel, OldValue, Duration);
 end;
 
 
